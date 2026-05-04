@@ -196,12 +196,25 @@
                                 }));
                             
                             if (processedForDB.length > 0) {
+                                // Deduplicate records within the same file before upserting
+                                // to avoid "ON CONFLICT DO UPDATE command cannot affect row a second time"
+                                const uniqueRecordsMap = new Map();
+                                processedForDB.forEach(record => {
+                                    // Create a unique key based on the same fields as the DB constraint
+                                    const key = `${record.production_date}|${record.machine}|${record.order_no}|${record.shift}|${record.customer}|${record.size}`;
+                                    uniqueRecordsMap.set(key, record);
+                                });
+
+                                const deduplicatedRecords = Array.from(uniqueRecordsMap.values());
+
                                 const { error } = await supabaseClient
                                     .from('production_records')
-                                    .insert(processedForDB);
+                                    .upsert(deduplicatedRecords, { 
+                                        onConflict: 'production_date, machine, order_no, shift, customer, size' 
+                                    });
 
                                 if (error) {
-                                    console.error('Insert error:', error.message);
+                                    console.error('Upsert error:', error.message);
                                     alert('Error saving data to database: ' + error.message);
                                 }
                             }

@@ -202,8 +202,27 @@
                                 processedForDB.forEach(record => {
                                     // Create a unique key based on the same fields as the DB constraint
                                     const key = `${record.production_date}|${record.machine}|${record.order_no}|${record.shift}|${record.customer}|${record.size}`;
-                                    uniqueRecordsMap.set(key, record);
+                                    
+                                    if (uniqueRecordsMap.has(key)) {
+                                        const existing = uniqueRecordsMap.get(key);
+                                        // Aggregate numeric fields
+                                        existing.fg_kg = (existing.fg_kg || 0) + (record.fg_kg || 0);
+                                        existing.fg_rolls = (existing.fg_rolls || 0) + (record.fg_rolls || 0);
+                                        existing.scrap_kg = (existing.scrap_kg || 0) + (record.scrap_kg || 0);
+                                        existing.rework_kg = (existing.rework_kg || 0) + (record.rework_kg || 0);
+                                        
+                                        // Join symptoms and causes
+                                        if (record.symptom && record.symptom !== 'ไม่มีระบุ' && !existing.symptom.includes(record.symptom)) {
+                                            existing.symptom = existing.symptom === 'ไม่มีระบุ' ? record.symptom : `${existing.symptom}; ${record.symptom}`;
+                                        }
+                                        if (record.cause && record.cause !== 'ไม่มีระบุ' && !existing.cause.includes(record.cause)) {
+                                            existing.cause = existing.cause === 'ไม่มีระบุ' ? record.cause : `${existing.cause}; ${record.cause}`;
+                                        }
+                                    } else {
+                                        uniqueRecordsMap.set(key, { ...record });
+                                    }
                                 });
+
 
                                 const deduplicatedRecords = Array.from(uniqueRecordsMap.values());
 

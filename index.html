@@ -284,27 +284,44 @@ function parseExcel(file){
       try{
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
         const records=[];
-        wb.SheetNames.filter(s=>/^BL\d+$/i.test(s)).forEach(sn=>{
+        // accept any sheet starting with BL or named BLxx
+        const blSheets=wb.SheetNames.filter(s=>/BL/i.test(s));
+        console.log("Sheets found:",wb.SheetNames,"BL sheets:",blSheets);
+        blSheets.forEach(sn=>{
           const ws=wb.Sheets[sn];
-          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:false,dateNF:"yyyy-mm-dd"});
+          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,dateNF:"yyyy-mm-dd"});
+          console.log("Sheet",sn,"rows:",rows.length,"sample row 1:",rows[1]);
           rows.forEach((row,ri)=>{
             if(ri===0)return;
+            if(!row||row.length<6)return;
             const machine=row[5]?String(row[5]).trim():null;
             if(!machine||!/^BL\d+$/i.test(machine))return;
+            const dateRaw=row[0];
+            if(!dateRaw)return;
             const rec={};
             Object.entries(CMAP).forEach(([ci,field])=>{
               let v=row[parseInt(ci)];
               if(v===null||v===undefined||v==="")v=null;
               else if(field==="production_date") v=excelDateToISO(v);
-              else if(NUMF.has(field)){v=parseFloat(v)||null;if(field==="scrap_kg"&&v&&rec.fg_kg&&v>rec.fg_kg*5)v=0;}
+              else if(NUMF.has(field)){
+                v=parseFloat(String(v).replace(/,/g,""))||null;
+                if(field==="scrap_kg"&&v&&rec.fg_kg&&v>rec.fg_kg*5)v=0;
+              }
               else if(typeof v==="string") v=v.trim()||null;
+              else v=String(v).trim()||null;
               rec[field]=v;
             });
-            if(rec.production_date&&rec.machine&&rec.shift&&rec.order_no) records.push(rec);
+            // fallback: use sheet name as machine if col5 already verified
+            if(!rec.machine) rec.machine=machine;
+            // fallback values for unique key fields
+            if(!rec.shift) rec.shift="unknown";
+            if(!rec.order_no) rec.order_no="N/A";
+            if(rec.production_date&&rec.machine) records.push(rec);
           });
         });
+        console.log("Total parsed records:",records.length, records[0]);
         res(records);
-      }catch(err){rej(err);}
+      }catch(err){console.error("parseExcel error:",err);rej(err);}
     };
     r.onerror=rej;
     r.readAsArrayBuffer(file);

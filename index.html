@@ -305,7 +305,12 @@ function parseExcel(file){
               else if(field==="production_date") v=excelDateToISO(v);
               else if(NUMF.has(field)){
                 v=parseFloat(String(v).replace(/,/g,""))||null;
-                if(field==="scrap_kg"&&v&&rec.fg_kg&&v>rec.fg_kg*5)v=0;
+                if(v!==null){
+                  // sanity caps
+                  if(field==="scrap_kg"&&rec.fg_kg&&v>rec.fg_kg*5) v=0;
+                  if((field==="fg_rolls"||field==="rework_rolls"||field==="wip_rolls"||field==="planned_rolls")&&v>9999) v=null;
+                  if((field==="fg_kg"||field==="scrap_kg"||field==="rework_kg"||field==="wip_kg"||field==="planned_kg")&&v>500000) v=null;
+                }
               }
               else if(typeof v==="string") v=v.trim()||null;
               else v=String(v).trim()||null;

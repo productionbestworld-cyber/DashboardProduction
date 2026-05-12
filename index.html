@@ -318,8 +318,9 @@ function parseExcel(file){
             });
             // fallback: use sheet name as machine if col5 already verified
             if(!rec.machine) rec.machine=machine;
-            // unique key = sheet + row index (guarantees no collision within same file)
-            rec.row_key=`${sn}_${ri}`;
+            // unique key = sheet + date + row index (unique across files AND within same file)
+            const dateKey=rec.production_date||'nodate';
+            rec.row_key=`${sn}_${dateKey}_${ri}`;
             if(!rec.shift) rec.shift="unknown";
             if(!rec.order_no) rec.order_no="N/A";
             if(rec.production_date&&rec.machine) records.push(rec);

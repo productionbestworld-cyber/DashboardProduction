@@ -294,8 +294,12 @@ function parseExcel(file){
           rows.forEach((row,ri)=>{
             if(ri===0)return;
             if(!row||row.length<6)return;
-            const machine=row[5]?String(row[5]).trim():null;
-            if(!machine||!/^BL\d+$/i.test(machine))return;
+            // machine: try col5 first, fallback to sheet name
+            let machine=row[5]?String(row[5]).trim():null;
+            if(!machine||!/^BL\d+$/i.test(machine)){
+              if(/^BL\d+$/i.test(sn)) machine=sn;
+              else return;
+            }
             const dateRaw=row[0];
             if(!dateRaw)return;
             const rec={};

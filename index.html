@@ -319,8 +319,15 @@ function parseExcel(file){
             if(rec.production_date&&rec.machine) records.push(rec);
           });
         });
-        console.log("Total parsed records:",records.length, records[0]);
-        res(records);
+        // Deduplicate by unique key before upsert
+        const seen=new Map();
+        records.forEach(r=>{
+          const key=[r.production_date,r.machine,r.shift,r.order_no].join("|");
+          seen.set(key,r); // last occurrence wins
+        });
+        const deduped=[...seen.values()];
+        console.log("Parsed:",records.length,"After dedup:",deduped.length);
+        res(deduped);
       }catch(err){console.error("parseExcel error:",err);rej(err);}
     };
     r.onerror=rej;

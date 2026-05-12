@@ -266,7 +266,7 @@ async function loadData(){
 }
 
 // ── Excel Upload ──────────────────────────────────────────────────────────────
-const CMAP={0:"production_date",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",25:"supervisor",26:"recorder",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
+const CMAP={0:"production_date",1:"start_time",2:"end_time",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",25:"supervisor",26:"recorder",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
 const NUMF=new Set(["planned_kg","planned_rolls","fg_kg","fg_rolls","wip_kg","scrap_kg","rework_kg","rework_rolls"]);
 
 function excelDateToISO(v){
@@ -316,14 +316,15 @@ function parseExcel(file){
             // fallback values for unique key fields
             if(!rec.shift) rec.shift="unknown";
             if(!rec.order_no) rec.order_no="N/A";
+            if(!rec.start_time) rec.start_time=String(ri);
             if(rec.production_date&&rec.machine) records.push(rec);
           });
         });
-        // Deduplicate by unique key before upsert
+        // Deduplicate by unique key (production_date+machine+order_no+start_time)
         const seen=new Map();
         records.forEach(r=>{
-          const key=[r.production_date,r.machine,r.shift,r.order_no].join("|");
-          seen.set(key,r); // last occurrence wins
+          const key=[r.production_date,r.machine,r.order_no,r.start_time].join("|");
+          seen.set(key,r);
         });
         const deduped=[...seen.values()];
         console.log("Parsed:",records.length,"After dedup:",deduped.length);
@@ -348,7 +349,7 @@ async function processFile(file){
     const BATCH=200;
     for(let i=0;i<records.length;i+=BATCH){
       const b=records.slice(i,i+BATCH);
-      const{error}=await sb.from('production_records').upsert(b,{onConflict:'production_date,machine,shift,order_no'});
+      const{error}=await sb.from('production_records').upsert(b,{onConflict:'production_date,machine,order_no,start_time'});
       if(error)throw error;
       step("step-upload","active","⏳ Upsert... "+Math.min(i+BATCH,records.length)+"/"+records.length+" รายการ");
     }

@@ -313,19 +313,16 @@ function parseExcel(file){
             });
             // fallback: use sheet name as machine if col5 already verified
             if(!rec.machine) rec.machine=machine;
-            // fallback values for unique key fields
+            // unique key = sheet + row index (guarantees no collision within same file)
+            rec.row_key=`${sn}_${ri}`;
             if(!rec.shift) rec.shift="unknown";
             if(!rec.order_no) rec.order_no="N/A";
-            if(!rec.start_time) rec.start_time=String(ri);
             if(rec.production_date&&rec.machine) records.push(rec);
           });
         });
-        // Deduplicate by unique key (production_date+machine+order_no+start_time)
+        // Deduplicate by row_key (sheet+row index) — no collision possible
         const seen=new Map();
-        records.forEach(r=>{
-          const key=[r.production_date,r.machine,r.order_no,r.start_time].join("|");
-          seen.set(key,r);
-        });
+        records.forEach(r=>seen.set(r.row_key,r));
         const deduped=[...seen.values()];
         console.log("Parsed:",records.length,"After dedup:",deduped.length);
         res(deduped);
@@ -349,7 +346,7 @@ async function processFile(file){
     const BATCH=200;
     for(let i=0;i<records.length;i+=BATCH){
       const b=records.slice(i,i+BATCH);
-      const{error}=await sb.from('production_records').upsert(b,{onConflict:'production_date,machine,order_no,start_time'});
+      const{error}=await sb.from('production_records').upsert(b,{onConflict:'row_key'});
       if(error)throw error;
       step("step-upload","active","⏳ Upsert... "+Math.min(i+BATCH,records.length)+"/"+records.length+" รายการ");
     }

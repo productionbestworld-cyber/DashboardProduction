@@ -266,7 +266,10 @@ async function loadData(){
 }
 
 // ── Excel Upload ──────────────────────────────────────────────────────────────
-const CMAP={0:"production_date",1:"start_time",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
+// Format A: BL01-BL11 individual sheets (old format)
+const CMAP_BL={0:"production_date",1:"start_time",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
+// Format B: single "Data" sheet (new ready format)
+const CMAP_DATA={0:"production_date",6:"start_time",9:"order_no",10:"sales_order",11:"machine",14:"product_code",15:"size",16:"customer",17:"product_group",18:"planned_kg",19:"planned_rolls",20:"fg_kg",21:"fg_rolls",24:"wip_kg",26:"scrap_kg",32:"shift",36:"symptom",37:"cause",38:"action",39:"rework_kg",40:"rework_rolls"};
 const NUMF=new Set(["planned_kg","planned_rolls","fg_kg","fg_rolls","wip_kg","scrap_kg","rework_kg","rework_rolls"]);
 
 function excelDateToISO(v){
@@ -283,6 +286,31 @@ function excelDateToISO(v){
   return null;
 }
 
+function parseRow(row,ri,cmap,sheetKey){
+  const rec={};
+  Object.entries(cmap).forEach(([ci,field])=>{
+    let v=row[parseInt(ci)];
+    if(v===null||v===undefined||v==="")v=null;
+    else if(field==="production_date") v=excelDateToISO(v);
+    else if(NUMF.has(field)){
+      v=parseFloat(String(v).replace(/,/g,""))||null;
+      if(v!==null){
+        if(field==="scrap_kg"&&rec.fg_kg&&v>rec.fg_kg*5) v=0;
+        if((field==="fg_rolls"||field==="rework_rolls"||field==="wip_rolls"||field==="planned_rolls")&&v>9999) v=null;
+        if((field==="fg_kg"||field==="scrap_kg"||field==="rework_kg"||field==="wip_kg"||field==="planned_kg")&&v>500000) v=null;
+      }
+    }
+    else if(typeof v==="string") v=v.trim()||null;
+    else v=String(v).trim()||null;
+    rec[field]=v;
+  });
+  if(!rec.shift) rec.shift="unknown";
+  if(!rec.order_no) rec.order_no="N/A";
+  const dateKey=rec.production_date||'nodate';
+  rec.row_key=`${sheetKey}_${dateKey}_${ri}`;
+  return rec;
+}
+
 function parseExcel(file){
   return new Promise((res,rej)=>{
     const r=new FileReader();
@@ -290,52 +318,42 @@ function parseExcel(file){
       try{
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
         const records=[];
-        // accept any sheet starting with BL or named BLxx
+        console.log("Sheets found:",wb.SheetNames);
+
+        // Format B: single "Data" sheet (new ready format)
+        if(wb.SheetNames.includes("Data")){
+          const ws=wb.Sheets["Data"];
+          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,dateNF:"yyyy-mm-dd"});
+          console.log("Data sheet rows:",rows.length);
+          rows.forEach((row,ri)=>{
+            if(ri===0||!row||row.length<20)return;
+            const machine=row[11]?String(row[11]).trim():null;
+            if(!machine||!/^BL\d+$/i.test(machine))return;
+            if(!row[0])return;
+            const rec=parseRow(row,ri,CMAP_DATA,"Data");
+            if(!rec.machine) rec.machine=machine;
+            if(rec.production_date&&rec.machine) records.push(rec);
+          });
+        } else {
+        // Format A: BL01-BL11 individual sheets (old format)
         const blSheets=wb.SheetNames.filter(s=>/BL/i.test(s));
-        console.log("Sheets found:",wb.SheetNames,"BL sheets:",blSheets);
         blSheets.forEach(sn=>{
           const ws=wb.Sheets[sn];
           const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,dateNF:"yyyy-mm-dd"});
-          console.log("Sheet",sn,"rows:",rows.length,"sample row 1:",rows[1]);
           rows.forEach((row,ri)=>{
-            if(ri===0)return;
-            if(!row||row.length<6)return;
-            // machine: try col5 first, fallback to sheet name
+            if(ri===0||!row||row.length<6)return;
             let machine=row[5]?String(row[5]).trim():null;
             if(!machine||!/^BL\d+$/i.test(machine)){
               if(/^BL\d+$/i.test(sn)) machine=sn;
               else return;
             }
-            const dateRaw=row[0];
-            if(!dateRaw)return;
-            const rec={};
-            Object.entries(CMAP).forEach(([ci,field])=>{
-              let v=row[parseInt(ci)];
-              if(v===null||v===undefined||v==="")v=null;
-              else if(field==="production_date") v=excelDateToISO(v);
-              else if(NUMF.has(field)){
-                v=parseFloat(String(v).replace(/,/g,""))||null;
-                if(v!==null){
-                  // sanity caps
-                  if(field==="scrap_kg"&&rec.fg_kg&&v>rec.fg_kg*5) v=0;
-                  if((field==="fg_rolls"||field==="rework_rolls"||field==="wip_rolls"||field==="planned_rolls")&&v>9999) v=null;
-                  if((field==="fg_kg"||field==="scrap_kg"||field==="rework_kg"||field==="wip_kg"||field==="planned_kg")&&v>500000) v=null;
-                }
-              }
-              else if(typeof v==="string") v=v.trim()||null;
-              else v=String(v).trim()||null;
-              rec[field]=v;
-            });
-            // fallback: use sheet name as machine if col5 already verified
+            if(!row[0])return;
+            const rec=parseRow(row,ri,CMAP_BL,sn);
             if(!rec.machine) rec.machine=machine;
-            // unique key = sheet + date + row index (unique across files AND within same file)
-            const dateKey=rec.production_date||'nodate';
-            rec.row_key=`${sn}_${dateKey}_${ri}`;
-            if(!rec.shift) rec.shift="unknown";
-            if(!rec.order_no) rec.order_no="N/A";
             if(rec.production_date&&rec.machine) records.push(rec);
           });
         });
+        }
         // Deduplicate by row_key (sheet+row index) — no collision possible
         const seen=new Map();
         records.forEach(r=>seen.set(r.row_key,r));

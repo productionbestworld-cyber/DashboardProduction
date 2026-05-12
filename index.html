@@ -266,7 +266,7 @@ async function loadData(){
 }
 
 // ── Excel Upload ──────────────────────────────────────────────────────────────
-const CMAP={0:"production_date",1:"start_time",2:"end_time",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",25:"supervisor",26:"recorder",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
+const CMAP={0:"production_date",1:"start_time",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
 const NUMF=new Set(["planned_kg","planned_rolls","fg_kg","fg_rolls","wip_kg","scrap_kg","rework_kg","rework_rolls"]);
 
 function excelDateToISO(v){

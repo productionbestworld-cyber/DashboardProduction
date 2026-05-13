@@ -1,5 +1,10 @@
 {
   "buildCommand": null,
   "outputDirectory": ".",
-  "framework": null
+  "framework": null,
+  "routes": [
+    { "src": "/form", "dest": "/form.html" },
+    { "src": "/form.html", "dest": "/form.html" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }

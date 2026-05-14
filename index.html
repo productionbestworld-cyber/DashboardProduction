@@ -270,8 +270,10 @@ async function loadData(){
 const CMAP_BL={0:"production_date",1:"start_time",3:"order_no",4:"sales_order",5:"machine",8:"product_code",9:"size",10:"customer",11:"product_group",12:"planned_kg",13:"planned_rolls",14:"fg_kg",15:"fg_rolls",18:"wip_kg",20:"scrap_kg",24:"shift",28:"symptom",29:"cause",30:"action",31:"rework_kg",32:"rework_rolls"};
 // Format B: single "Data" sheet
 const CMAP_DATA={0:"production_date",6:"start_time",9:"order_no",10:"sales_order",11:"machine",14:"product_code",15:"size",16:"customer",17:"product_group",18:"planned_kg",19:"planned_rolls",20:"fg_kg",21:"fg_rolls",24:"wip_kg",26:"scrap_kg",32:"shift",36:"symptom",37:"cause",38:"action",39:"rework_kg",40:"rework_rolls"};
-// Format C: "All_Data" consolidated sheet (col 0-3 = metadata, data starts col 4)
+// Format C1: "All_Data" v1 (37 cols, metadata cols 0-3)
 const CMAP_ALL={4:"production_date",5:"start_time",7:"order_no",8:"sales_order",9:"machine",12:"product_code",13:"size",14:"customer",15:"product_group",16:"planned_kg",17:"planned_rolls",18:"fg_kg",19:"fg_rolls",22:"wip_kg",24:"scrap_kg",28:"shift",32:"symptom",33:"cause",34:"action",35:"rework_kg",36:"rework_rolls"};
+// Format C2: "All_Data" v2 (40 cols, metadata cols 0-6, machine at col 12)
+const CMAP_ALL_V2={7:"production_date",8:"start_time",10:"order_no",11:"sales_order",12:"machine",15:"product_code",16:"size",17:"customer",18:"product_group",19:"planned_kg",20:"planned_rolls",21:"fg_kg",22:"fg_rolls",25:"wip_kg",27:"scrap_kg",31:"shift",35:"symptom",36:"cause",37:"action",38:"rework_kg",39:"rework_rolls"};
 const NUMF=new Set(["planned_kg","planned_rolls","fg_kg","fg_rolls","wip_kg","scrap_kg","rework_kg","rework_rolls"]);
 
 function excelDateToISO(v){
@@ -322,17 +324,23 @@ function parseExcel(file){
         const records=[];
         console.log("Sheets found:",wb.SheetNames);
 
-        // Format C: "All_Data" consolidated sheet
+        // Format C: "All_Data" consolidated sheet (detect v1 vs v2 by col count)
         if(wb.SheetNames.includes("All_Data")){
           const ws=wb.Sheets["All_Data"];
           const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true,dateNF:"yyyy-mm-dd"});
-          console.log("All_Data sheet rows:",rows.length);
+          // detect version: v2 has >=40 cols, machine at col 12; v1 has 37 cols, machine at col 9
+          const sampleLen=rows[1]?rows[1].length:0;
+          const isV2=sampleLen>=40;
+          const cmap=isV2?CMAP_ALL_V2:CMAP_ALL;
+          const machCol=isV2?12:9;
+          const dateCol=isV2?7:4;
+          console.log("All_Data v"+(isV2?"2":"1")+" rows:",rows.length,"cols:",sampleLen);
           rows.forEach((row,ri)=>{
             if(ri===0||!row||row.length<20)return;
-            const machine=row[9]?String(row[9]).trim():null;
+            const machine=row[machCol]?String(row[machCol]).trim():null;
             if(!machine||!/^BL\d+$/i.test(machine))return;
-            if(!row[4])return;
-            const rec=parseRow(row,ri,CMAP_ALL,"All_Data");
+            if(!row[dateCol])return;
+            const rec=parseRow(row,ri,cmap,"All_Data");
             if(!rec.machine) rec.machine=machine;
             if(rec.production_date&&rec.machine) records.push(rec);
           });
